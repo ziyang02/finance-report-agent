@@ -1,0 +1,18 @@
+services:
+  app:
+    build: .
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./reports:/app/reports
+    # 阶段 E：如需本地模型，取消下面注释，并把 .env 指向 vllm 服务
+    # depends_on: [vllm]
+
+  # vllm:
+  #   image: vllm/vllm-openai:latest
+  #   command: ["--model", "Qwen/Qwen2.5-7B-Instruct"]
+  #   ports: ["8000:8000"]
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices: [{capabilities: ["gpu"]}]

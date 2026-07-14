@@ -1,0 +1,37 @@
+[project]
+name = "finance-report-agent"
+version = "0.1.0"
+description = "金融研报生成 Agent：Planner-Retriever-Analyst-Critic-Writer 多智能体系统"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.40",
+    "langgraph>=0.2",
+    "langchain-core>=0.3",
+    "faiss-cpu>=1.8",
+    "numpy>=1.26",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0",
+    "pydantic>=2.7",
+    # 以下在对应阶段再装，先注释避免首次安装过重：
+    # "FlagEmbedding>=1.2",   # 阶段 B/D: bge-m3 + bge-reranker
+    # "akshare>=1.14",        # 阶段 B: A股数据
+    # "pymupdf>=1.24",        # 阶段 B: 研报 PDF 解析
+    # "ragas>=0.1",           # 阶段 F: 评估
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+rag = ["FlagEmbedding>=1.2", "akshare>=1.14", "pymupdf>=1.24"]
+eval = ["ragas>=0.1", "datasets>=2.19"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

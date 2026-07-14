@@ -1,0 +1,16 @@
+# 集中配置，代码里别硬编码超参
+rag:
+  embed_model: BAAI/bge-m3
+  rerank_model: BAAI/bge-reranker-v2-m3
+  chunk_size: 400
+  chunk_overlap: 50
+  k_recall: 20        # 召回数（喂给 reranker）
+  k_final: 5          # 重排后最终喂给 LLM 的条数
+  index_dir: data/index
+
+agent:
+  max_revise: 2       # Critic 反思回路最大轮次，防死循环
+  subquestion_max: 5
+
+data:
+  cache_dir: data/cache

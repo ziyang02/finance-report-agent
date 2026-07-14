@@ -1,0 +1,54 @@
+"""bge-m3 向量化封装。阶段 B 实现。
+
+离线/未装 FlagEmbedding 时用一个确定性的 hash 伪向量，保证 index/pipeline 能跑通流程，
+真接入时把 encode() 换成真模型即可（接口不变）。
+"""
+from __future__ import annotations
+
+import hashlib
+import os
+
+# 国内直连 huggingface.co 常常很慢/超时，默认走镜像（未手动设置时才生效）。
+os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
+
+import numpy as np  # noqa: E402
+
+from src.config import settings  # noqa: E402
+
+_DIM_FALLBACK = 256
+
+
+class Embedder:
+    def __init__(self, model_name: str | None = None):
+        self.model_name = model_name or settings()["rag"]["embed_model"]
+        self._model = None
+        # CI / 离线：置 RAG_FAKE_EMBED=1 强制用伪向量，避免下载 ~2GB 模型
+        if os.getenv("RAG_FAKE_EMBED") == "1":
+            return
+        try:
+            from FlagEmbedding import BGEM3FlagModel
+
+            self._model = BGEM3FlagModel(self.model_name, use_fp16=True)
+        except Exception:
+            self._model = None  # 回退伪向量（模型未下载/网络不通时）
+
+    @property
+    def real(self) -> bool:
+        return self._model is not None
+
+    def encode(self, texts: list[str], normalize: bool = True) -> np.ndarray:
+        if self._model is not None:
+            out = self._model.encode(texts, return_dense=True)["dense_vecs"]
+            vecs = np.asarray(out, dtype="float32")
+        else:
+            vecs = np.stack([self._fake_vec(t) for t in texts]).astype("float32")
+        if normalize:
+            vecs /= (np.linalg.norm(vecs, axis=1, keepdims=True) + 1e-8)
+        return vecs
+
+    @staticmethod
+    def _fake_vec(text: str) -> np.ndarray:
+        h = hashlib.sha256(text.encode()).digest()
+        seed = int.from_bytes(h[:4], "little")
+        rng = np.random.default_rng(seed)
+        return rng.standard_normal(_DIM_FALLBACK)
