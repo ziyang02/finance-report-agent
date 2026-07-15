@@ -1,0 +1,24 @@
+# 构建上下文瘦身：不进镜像的东西都挡在这里
+.git
+.github
+.venv
+venv
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.env
+.env.*
+!.env.example
+
+# 大文件：模型权重(2.2GB)、索引、缓存、产物——运行时用 volume 挂载
+models/
+data/
+reports/
+eval_results*.md
+
+# 本机杂物
+.DS_Store
+docs/
+*.log

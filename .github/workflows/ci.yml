@@ -23,3 +23,14 @@ jobs:
         env:
           RAG_FAKE_EMBED: "1"   # CI 不下载 bge-m3，用确定性伪向量
         run: pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t finance-report-agent .
+      - name: Smoke test（无 key 离线 stub 全链路出报告）
+        run: |
+          docker run --rm finance-report-agent
+          docker run --rm finance-report-agent python -c "from src.agents.graph import build_graph; build_graph(None); print('graph OK')"

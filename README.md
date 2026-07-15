@@ -3,7 +3,7 @@
 给定一支股票/一个行业，自动检索财报、行情、研报片段，经 **Planner→Retriever→Analyst→Critic→Writer**
 多智能体协作，产出**带数据、带引用、可溯源**的研报草稿。
 
-![CI](https://github.com/<your-name>/finance-report-agent/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/ziyang02/finance-report-agent/actions/workflows/ci.yml/badge.svg)
 
 ## 架构
 
@@ -59,6 +59,19 @@ huggingface-cli download BAAI/bge-reranker-v2-m3   # 阶段 D 精排用
 
 > 测试/CI 设 `RAG_FAKE_EMBED=1` 强制伪向量，全程不触网、不下载模型（`pytest` < 1s）。
 
+### Docker
+
+```bash
+docker build -t finance-report-agent .
+# 无 .env 也能跑（离线 stub）；带 key + 挂载索引则为真实生成
+docker run --rm --env-file .env \
+  -v ./data:/app/data -v ./reports:/app/reports \
+  finance-report-agent python main.py "贵州茅台 600519"
+```
+
+> 镜像只含基础依赖（API 模式，~300MB）；RAG 重依赖（torch/bge）体积大，
+> 建议宿主机建好索引后挂载 `data/` 进容器。
+
 ## 开发路线（对应 `../Agent项目落地方案.md`）
 - [x] 脚手架 + Function Calling demo（阶段 A）
 - [x] RAG：真实 akshare 财务数据 + bge-m3 + FAISS（阶段 B）
@@ -66,7 +79,7 @@ huggingface-cli download BAAI/bge-reranker-v2-m3   # 阶段 D 精排用
 - [x] 评估框架：LLM-as-Judge（faithfulness/context_precision/correctness）+ 对比 runner（阶段 F）
 - [x] 微调 bge-reranker（阶段 E-上：本地 M2/MPS 训练，`scripts/make_rerank_dataset.py` + `scripts/train_reranker.py`）
 - [ ] LLaMA-Factory SFT + vLLM 部署（阶段 E-下：材料已就绪，见 [sft/](sft/)，需云端 GPU）
-- [ ] Docker + CI 收尾（阶段 G）
+- [x] Docker + CI 收尾（阶段 G：多阶段构建 + .dockerignore；CI = lint + test + docker build 冒烟）
 
 ## 评估结果（LLM-as-Judge / DeepSeek，详见 [eval_results.md](eval_results.md)）
 
