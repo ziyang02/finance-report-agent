@@ -1,7 +1,9 @@
 # 集中配置，代码里别硬编码超参
 rag:
-  embed_model: BAAI/bge-m3
-  rerank_model: BAAI/bge-reranker-v2-m3
+  # 本地网速受限用轻量 bge-small-zh（~100MB）；服务器/好网络换回 BAAI/bge-m3
+  embed_model: models/bge-small-zh-v1.5
+  # 预训练重排基线；阶段 E 微调产物在 models/bge-reranker-ft（评估自动对比）
+  rerank_model: models/bge-reranker-base
   chunk_size: 400
   chunk_overlap: 50
   k_recall: 20        # 召回数（喂给 reranker）

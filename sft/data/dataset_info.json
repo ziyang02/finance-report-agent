@@ -1,0 +1,10 @@
+{
+  "finance_rag_qa": {
+    "file_name": "finance_rag_qa.json",
+    "columns": {
+      "prompt": "instruction",
+      "query": "input",
+      "response": "output"
+    }
+  }
+}

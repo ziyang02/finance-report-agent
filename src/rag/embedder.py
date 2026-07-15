@@ -26,9 +26,15 @@ class Embedder:
         if os.getenv("RAG_FAKE_EMBED") == "1":
             return
         try:
-            from FlagEmbedding import BGEM3FlagModel
+            # bge-m3 用专用类；其它 bge 系列（如 bge-small-zh，网速受限时的轻量选择）用通用类
+            if "m3" in self.model_name.lower():
+                from FlagEmbedding import BGEM3FlagModel
 
-            self._model = BGEM3FlagModel(self.model_name, use_fp16=True)
+                self._model = BGEM3FlagModel(self.model_name, use_fp16=True)
+            else:
+                from FlagEmbedding import FlagModel
+
+                self._model = FlagModel(self.model_name, use_fp16=True)
         except Exception:
             self._model = None  # 回退伪向量（模型未下载/网络不通时）
 
@@ -38,7 +44,9 @@ class Embedder:
 
     def encode(self, texts: list[str], normalize: bool = True) -> np.ndarray:
         if self._model is not None:
-            out = self._model.encode(texts, return_dense=True)["dense_vecs"]
+            out = self._model.encode(texts)
+            if isinstance(out, dict):  # BGEM3FlagModel 返回 {"dense_vecs": ...}
+                out = out["dense_vecs"]
             vecs = np.asarray(out, dtype="float32")
         else:
             vecs = np.stack([self._fake_vec(t) for t in texts]).astype("float32")

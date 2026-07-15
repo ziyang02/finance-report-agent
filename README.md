@@ -64,18 +64,30 @@ huggingface-cli download BAAI/bge-reranker-v2-m3   # 阶段 D 精排用
 - [x] RAG：真实 akshare 财务数据 + bge-m3 + FAISS（阶段 B）
 - [x] LangGraph 多智能体主系统 + 反思重检索 + 全局引用编号（阶段 D）
 - [x] 评估框架：LLM-as-Judge（faithfulness/context_precision/correctness）+ 对比 runner（阶段 F）
-- [ ] 微调 bge-reranker / LLaMA-Factory SFT + vLLM 部署（阶段 E）
+- [x] 微调 bge-reranker（阶段 E-上：本地 M2/MPS 训练，`scripts/make_rerank_dataset.py` + `scripts/train_reranker.py`）
+- [ ] LLaMA-Factory SFT + vLLM 部署（阶段 E-下：材料已就绪，见 [sft/](sft/)，需云端 GPU）
 - [ ] Docker + CI 收尾（阶段 G）
 
 ## 评估结果（LLM-as-Judge / DeepSeek，详见 [eval_results.md](eval_results.md)）
 
+17 家公司真实财务数据、15 题三梯度评测集（多公司单点 / 跨公司对比 / 无公司名筛选）：
+
 | 配置 | faithfulness | context_precision | answer_correctness |
 |---|---|---|---|
-| baseline（不重排） | 0.75 | 0.40 | 0.875 |
-| rerank（bge-reranker） | 0.75 | 0.40 | 0.875 |
+| baseline（不重排） | 0.800 | 0.333 | 0.793 |
+| rerank（通用 bge-reranker-base） | 0.644 | 0.280 | 0.767 |
+| **rerank_ft（域内微调后）** | **0.800** | **0.347** | **0.793** |
 
-> 当前为伪向量模式：两行相同属预期。`context_precision` 仅 0.40 暴露检索精度短板，
-> 装好 bge-m3 后重跑，rerank 行的提升即为可写进简历的数字。`answer_correctness` 0.875
-> 说明系统对真实财务数据的问答已可靠。
+> **核心发现：通用重排器在垂直领域负迁移**（faithfulness -16pt），域内微调后收复并反超
+> （vs 通用重排 context_precision/faithfulness 均相对 **+24%**）。微调数据由 LLM 合成
+> query + FAISS 难负样本挖掘构造（201 train / 33 dev），训练层面 dev acc@1 0.879→1.0。
+
+> 本地网速受限时 embedding 用 bge-small-zh-v1.5（~100MB）；好网络下改回
+> `configs/settings.yaml` 的 `embed_model: BAAI/bge-m3` 并重建索引即可。
+
+## 实战笔记
+
+- [Stage E 踩坑记录](docs/踩坑记录-StageE.md)：本地微调全程 17 个真实问题的定位与修复
+  （环境冲突 / 弱网下载 / macOS 深度学习栈兼容性 / 数据质量 / 评测设计）。
 
 > 数据仅用于个人学习 demo，不构成投资建议。

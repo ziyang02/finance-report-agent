@@ -24,6 +24,21 @@ _ABSTRACT_KEYS = [
 ]
 
 
+# 代码->名称映射：chunk 文本里带上公司名，检索才能匹配"贵州茅台"这类自然语言提问
+_CODE_NAMES = {
+    "600519": "贵州茅台", "000858": "五粮液", "601318": "中国平安", "600036": "招商银行",
+    "601398": "工商银行", "600900": "长江电力", "601899": "紫金矿业", "600309": "万华化学",
+    "002415": "海康威视", "000333": "美的集团", "600276": "恒瑞医药", "300750": "宁德时代",
+    "002594": "比亚迪", "601888": "中国中免", "600030": "中信证券", "000651": "格力电器",
+    "601012": "隆基绿能", "600887": "伊利股份", "002714": "牧原股份", "601668": "中国建筑",
+}
+
+
+def _label(code: str) -> str:
+    name = _CODE_NAMES.get(code, "")
+    return f"{name}({code})" if name else code
+
+
 def _cache_path(code: str) -> Path:
     d = Path(settings()["data"]["cache_dir"])
     d.mkdir(parents=True, exist_ok=True)
@@ -54,7 +69,7 @@ def _docs_from_analysis(code: str) -> list[dict]:
                 parts.append(f"{col}={row[col]}")
         if parts:
             docs.append({
-                "text": f"{code} 截至 {date} 的关键财务比率：" + "；".join(parts) + "。",
+                "text": f"{_label(code)} 截至 {date} 的关键财务比率：" + "；".join(parts) + "。",
                 "source": f"{code}-财务比率-{date}",
             })
     return docs
@@ -78,7 +93,7 @@ def _docs_from_abstract(code: str) -> list[dict]:
                     parts.append(f"{name}={_fmt(val)}")
         if parts:
             docs.append({
-                "text": f"{code} 报告期 {date} 的主要财务数据：" + "；".join(parts[:12]) + "。",
+                "text": f"{_label(code)} 报告期 {date} 的主要财务数据：" + "；".join(parts[:12]) + "。",
                 "source": f"{code}-财务摘要-{date}",
             })
     return docs
@@ -99,7 +114,7 @@ def _docs_from_valuation(code: str) -> list[dict]:
     if not parts:
         return []
     return [{
-        "text": f"{code} 截至 {date} 的估值指标：" + "；".join(parts) + "。",
+        "text": f"{_label(code)} 截至 {date} 的估值指标：" + "；".join(parts) + "。",
         "source": f"{code}-估值-{date}",
     }]
 

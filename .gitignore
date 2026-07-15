@@ -12,3 +12,5 @@ data/index/
 *.faiss
 reports/
 .DS_Store
+models/
+eval_results 2.md

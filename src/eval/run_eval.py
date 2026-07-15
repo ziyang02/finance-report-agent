@@ -1,12 +1,13 @@
 """评估入口：对 EVAL_SET 跑 RAG-QA，用 LLM-as-Judge 打分，输出对比表到 eval_results.md。
 
-    python -m src.eval.run_eval                # 跑基线 + 重排两组对比
+    python -m src.eval.run_eval                # 跑全部配置对比
     python -m src.eval.run_eval --config rerank
 
-对比两组配置：
-  baseline  召回后直接取 top-k（不重排）
-  rerank    召回 k_recall -> bge-reranker 精排 -> top-k
-（伪向量下两组会接近；装好 bge-m3 后 rerank 组的 context_precision 才体现真实提升）
+对比配置：
+  baseline   召回后直接取 top-k（不重排）
+  rerank     召回 k_recall -> bge-reranker-v2-m3 精排 -> top-k
+  rerank_ft  召回 -> 微调后的 reranker（models/bge-reranker-ft，阶段 E 产物）
+（rerank_ft 行仅在训练产物存在时出现；伪向量模式下各组接近，结果不可比）
 """
 from __future__ import annotations
 
@@ -62,11 +63,19 @@ def main():
         only = sys.argv[sys.argv.index("--config") + 1]
 
     pipeline = RagPipeline.from_dir()
-    configs = [("baseline", False), ("rerank", True)]
+    configs = [("baseline", pipeline, False), ("rerank", pipeline, True)]
+
+    ft_dir = Path("models/bge-reranker-ft")   # 阶段 E 微调产物，存在才对比
+    if ft_dir.exists():
+        from src.rag.reranker import Reranker
+
+        ft_pipe = RagPipeline(pipeline.index, reranker=Reranker(model_name=str(ft_dir)))
+        configs.append(("rerank_ft", ft_pipe, True))
+
     if only:
         configs = [c for c in configs if c[0] == only]
 
-    results = [eval_config(name, pipeline, use_rerank) for name, use_rerank in configs]
+    results = [eval_config(name, pipe, use_rerank) for name, pipe, use_rerank in configs]
     table = render_table(results)
 
     out = Path("eval_results.md")
@@ -75,12 +84,15 @@ def main():
         "- **faithfulness**：答案里被检索资料支撑的 claim 占比（防幻觉）。\n"
         "- **context_precision**：检索到的资料中与问题相关的占比（检索质量）。\n"
         "- **answer_correctness**：答案对照参考答案的正确性（端到端质量）。\n"
+        "\n## 配置说明\n"
+        "- **baseline**：bge-m3 召回后直接取 top-k，不重排。\n"
+        "- **rerank**：召回 20 条 -> 预训练 bge-reranker-v2-m3 精排取 5。\n"
+        "- **rerank_ft**：召回 20 条 -> 领域微调后的 bge-reranker-base（阶段 E，"
+        "训练数据为 LLM 生成 query + FAISS 难负样本挖掘）。\n"
         "\n## 解读\n"
-        "- `context_precision` 偏低，是因为当前用**伪向量**检索、且库很小(全量召回)，"
-        "无法按语义区分相关性——**这正是 bge-m3 + bge-reranker 要解决的问题**。\n"
-        "- 装好 bge-m3 后重跑：baseline vs rerank 两行的 `context_precision` 差值，"
-        "就是简历可写的“引入重排后检索精度提升 X%”。\n"
-        "- `answer_correctness` 已较高，说明多智能体对**真实财务数据**的问答本身可靠。\n"
+        "- baseline vs rerank 的差值 = 引入重排的收益；"
+        "rerank vs rerank_ft 的差值 = 领域微调的收益。\n"
+        "- 评测集仅 8 问且同源语料较小，数字有波动，趋势比绝对值更有意义。\n"
     )
     out.write_text("# 评估结果\n\n" + table + analysis, encoding="utf-8")
     print("\n" + table)

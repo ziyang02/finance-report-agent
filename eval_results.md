@@ -1,30 +1,21 @@
 # 评估结果
 
-> 数据集：8 条问题（`src/eval/dataset.py`），标的 600519，LLM-as-Judge 用 DeepSeek。
-> 当前为**伪向量**模式（bge-m3 未下载）——见下方解读。
-
 | 配置 | 样本数 | faithfulness | context_precision | answer_correctness |
 |---|---|---|---|---|
-| baseline（不重排） | 8 | 0.75 | 0.40 | 0.875 |
-| rerank（bge-reranker） | 8 | 0.75 | 0.40 | 0.875 |
+| baseline | 15 | 0.8 | 0.333 | 0.793 |
+| rerank | 15 | 0.644 | 0.28 | 0.767 |
+| rerank_ft | 15 | 0.8 | 0.347 | 0.793 |
 
 ## 指标含义
 - **faithfulness**：答案里被检索资料支撑的 claim 占比（防幻觉）。
 - **context_precision**：检索到的资料中与问题相关的占比（检索质量）。
 - **answer_correctness**：答案对照参考答案的正确性（端到端质量）。
 
-## 解读
-- **`context_precision` 仅 0.40 是关键信号**：当前用伪向量检索、库很小(几乎全量召回)，
-  无法按语义区分相关性——**这正是 bge-m3 + bge-reranker 要解决的问题**。
-- 装好 bge-m3 后重跑（`python -m src.eval.run_eval`）：baseline 与 rerank 两行的
-  `context_precision` 差值，就是简历可写的“引入重排后检索精度提升 X%”。
-- **`answer_correctness` 0.875 已较高**：说明多智能体对**真实财务数据**的问答本身可靠；
-  伪向量下仍能答对，是因为库小、相关 chunk 大概率被召回。
-- baseline 与 rerank 完全相同，是伪向量下的**预期结果**（reranker 无语义可排），
-  也反过来验证了评估框架本身正确——真实模型接入后差异才会显现。
+## 配置说明
+- **baseline**：bge-m3 召回后直接取 top-k，不重排。
+- **rerank**：召回 20 条 -> 预训练 bge-reranker-v2-m3 精排取 5。
+- **rerank_ft**：召回 20 条 -> 领域微调后的 bge-reranker-base（阶段 E，训练数据为 LLM 生成 query + FAISS 难负样本挖掘）。
 
-## 复现
-```bash
-python scripts/build_index.py 600519          # 建库（装好 bge-m3 后为真实语义）
-python -m src.eval.run_eval                    # 跑 baseline + rerank 两组对比
-```
+## 解读
+- baseline vs rerank 的差值 = 引入重排的收益；rerank vs rerank_ft 的差值 = 领域微调的收益。
+- 评测集仅 8 问且同源语料较小，数字有波动，趋势比绝对值更有意义。

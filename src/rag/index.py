@@ -4,9 +4,15 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
-import faiss
+# macOS 下 faiss 与 torch 各带一份 OpenMP 运行时，同进程共存会段错误（exit 139）。
+# 两个都要：允许重复运行时 + 单线程避免两套线程池打架。必须在 import faiss 前设置。
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+
+import faiss  # noqa: E402
 
 from src.rag.embedder import Embedder
 
