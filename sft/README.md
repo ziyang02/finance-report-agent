@@ -16,10 +16,15 @@ python scripts/make_rerank_dataset.py   # 若还没跑过（产出 query）
 python scripts/make_sft_dataset.py      # 蒸馏 -> sft/data/finance_rag_qa.json
 ```
 
-## 1. 租云端 GPU
+## 1. 租云端 GPU（RunPod）
 
-AutoDL / 仙宫云等，单卡 **RTX 4090 24GB** 即够（7B LoRA bf16）。
-镜像选 PyTorch 2.x + CUDA 12.x。把本仓库（至少 `sft/` 目录）传上去。
+[runpod.io](https://www.runpod.io)：单卡 **RTX 4090 24GB** 即够（7B LoRA bf16），~$0.6/hr。
+- Template：RunPod PyTorch 2.x（CUDA 12.x）
+- Container/Volume Disk 各调到 **60GB**（Qwen 7B 权重 + LoRA 合并产物 ~35GB）
+- 国内平台（AutoDL 等）同理，镜像选 PyTorch 2.x + CUDA 12.x 即可
+
+美国机房直连 HuggingFace，无需镜像。训练数据已随仓库分发
+（`sft/data/finance_rag_qa.json`），云端 git clone 即得。
 
 ## 2. 装 LLaMA-Factory 并训练
 
@@ -27,12 +32,14 @@ AutoDL / 仙宫云等，单卡 **RTX 4090 24GB** 即够（7B LoRA bf16）。
 git clone --depth 1 https://github.com/hiyouga/LLaMA-Factory.git
 cd LLaMA-Factory && pip install -e ".[torch,metrics]"
 
-# 国内下载 Qwen 权重走 modelscope（可选）
-export USE_MODELSCOPE_HUB=1
+# 国内平台才需要：下载 Qwen 权重走 modelscope
+# export USE_MODELSCOPE_HUB=1
 
-cd /path/to/finance-report-agent
+cd /workspace   # RunPod 的持久盘挂载点
+git clone https://github.com/ziyang02/finance-report-agent.git
+cd finance-report-agent
 llamafactory-cli train sft/qwen2_5_7b_lora_sft.yaml
-# 4090 上约 10-20 分钟（数据几百条、3 epoch）；loss 曲线在 saves/ 下
+# 4090 上约 10-20 分钟（数据 201 条、3 epoch）；loss 曲线在 saves/ 下
 ```
 
 ## 3. 合并 LoRA 并用 vLLM 起服务
@@ -50,11 +57,17 @@ vllm serve models/qwen2.5-7b-finance --port 8000 --max-model-len 4096
 
 ## 4. 主系统无缝切换 + 量化收益
 
-本地项目 `.env` 改三行（把 <ip> 换成云端公网/内网穿透地址）：
+**RunPod 端口打通**（二选一）：
+- SSH 隧道（推荐，本地 Mac 执行）：`ssh -L 8000:localhost:8000 <pod的ssh指令参数>`，
+  之后本地访问 `http://localhost:8000/v1`
+- 或在 Pod 配置里把 8000 加入 Expose HTTP Ports，用 RunPod 分配的
+  `https://<pod-id>-8000.proxy.runpod.net/v1`
+
+本地项目 `.env` 改三行：
 
 ```
-LLM_BASE_URL=http://<ip>:8000/v1
-LLM_API_KEY=EMPTY-but-not-empty     # vLLM 默认不校验，非空即可
+LLM_BASE_URL=http://localhost:8000/v1   # 或 runpod proxy 地址
+LLM_API_KEY=EMPTY-but-not-empty         # vLLM 默认不校验，非空即可
 LLM_MODEL=models/qwen2.5-7b-finance
 ```
 

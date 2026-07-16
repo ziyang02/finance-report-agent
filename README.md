@@ -78,8 +78,23 @@ docker run --rm --env-file .env \
 - [x] LangGraph 多智能体主系统 + 反思重检索 + 全局引用编号（阶段 D）
 - [x] 评估框架：LLM-as-Judge（faithfulness/context_precision/correctness）+ 对比 runner（阶段 F）
 - [x] 微调 bge-reranker（阶段 E-上：本地 M2/MPS 训练，`scripts/make_rerank_dataset.py` + `scripts/train_reranker.py`）
-- [ ] LLaMA-Factory SFT + vLLM 部署（阶段 E-下：材料已就绪，见 [sft/](sft/)，需云端 GPU）
+- [x] LLaMA-Factory SFT 蒸馏 + OpenAI 兼容部署（阶段 E-下：RTX 4090，见 [sft/](sft/)）
 - [x] Docker + CI 收尾（阶段 G：多阶段构建 + .dockerignore；CI = lint + test + docker build 冒烟）
+
+## 蒸馏结果（阶段 E-下：7B 学生追平 671B 老师）
+
+用 DeepSeek 当老师，蒸馏 201 条金融 RAG 问答数据，LoRA 微调 Qwen2.5-7B-Instruct
+（RTX 4090，3 epoch ≈ 4 分钟，train_loss 0.39 / eval_loss 0.29），
+LLaMA-Factory 起 OpenAI 兼容服务后与老师同题对比（评委统一 DeepSeek）：
+
+| 模型 | 参数量 | faithfulness | answer_correctness |
+|---|---|---|---|
+| 老师 DeepSeek | 671B | 0.733 | 0.793 |
+| **学生 Qwen2.5-7B-ft** | **7B** | **0.733** | **0.800** |
+
+> 学生模型以 ~1/96 的参数量在领域问答上追平（answer_correctness 微超）老师。
+> 师生在同 3 道题上一致失败——均为无公司名筛选题的**检索**未召回，非生成问题。
+> 主系统零改动切换：只改 `.env` 的 `LLM_BASE_URL/LLM_MODEL` 指向自托管服务。
 
 ## 评估结果（LLM-as-Judge / DeepSeek，详见 [eval_results.md](eval_results.md)）
 
