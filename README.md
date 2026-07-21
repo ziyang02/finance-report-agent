@@ -1,7 +1,8 @@
 # 金融研报 Agent
 
-给定一支股票/一个行业，自动检索财报、行情、研报片段，经 **Planner→Retriever→Analyst→Critic→Writer**
-多智能体协作，产出**带数据、带引用、可溯源**的研报草稿。
+输入一支股票（比如"贵州茅台 600519"），系统自动检索财报、行情数据，经
+Planner → Retriever → Analyst → Critic → Writer 五个角色协作，生成一份带引用编号、
+能溯源到原始数据的研报草稿。
 
 ![CI](https://github.com/ziyang02/finance-report-agent/actions/workflows/ci.yml/badge.svg)
 
@@ -20,102 +21,105 @@ graph LR
 
 | 层 | 选型 |
 |---|---|
-| 编排 | LangGraph（状态图，支持 Critic 反思回路） |
-| 检索 | bge-m3 编码 + FAISS + bge-reranker 重排 |
-| LLM | 任意 OpenAI 兼容端点（DeepSeek / 通义 / 本地 vLLM） |
-| 数据 | akshare（A股财报/行情/公告）+ 研报 PDF |
-| 评估 | RAGAS（faithfulness 等）+ LLM-as-Judge |
+| 编排 | LangGraph（状态图，Critic 判 revise 会带着意见打回重检索） |
+| 检索 | bge 系列 embedding + FAISS + bge-reranker 重排 |
+| LLM | 任意 OpenAI 兼容端点（DeepSeek / 通义 / 自托管 vLLM 均可） |
+| 数据 | akshare（A股财报 / 行情 / 估值） |
+| 评估 | 自建 LLM-as-Judge：faithfulness / context_precision / answer_correctness |
 | 工程 | Docker + pytest + GitHub Actions |
 
 ## 快速开始
 
 ```bash
 pip install -e ".[dev]"          # 基础依赖 + 测试
-cp .env.example .env             # 填入 LLM_API_KEY（不填也能跑离线 stub）
+cp .env.example .env             # 填入 LLM_API_KEY（不填也能跑，走离线 stub）
 
-python demo_function_calling.py  # 阶段A：Function Calling 演示
-pip install -e ".[rag]"          # 阶段B：装 akshare + bge-m3（首次会下载 ~2GB 模型）
-python scripts/build_index.py 600519 000858   # 拉真实财务数据 + 建向量库
+python demo_function_calling.py  # 手写 Function Calling loop 的演示
+pip install -e ".[rag]"          # 装 akshare + FlagEmbedding（要下 embedding 模型）
+python scripts/build_index.py 600519 000858   # 拉财务数据 + 建向量库
 python main.py "贵州茅台 600519" # 端到端生成研报 -> reports/
 pytest -q                        # 全部测试
 ```
 
-> **离线模式**：未配置 API key / 未装 FlagEmbedding / 模型未下载时，LLM 走占位 stub、embedding 走确定性伪向量，
-> 整条链路仍可跑通——方便先理解结构，再逐阶段接入真实组件。
+没配 API key、没装 FlagEmbedding 时，LLM 走占位 stub、embedding 走确定性伪向量，
+整条链路照样能跑通——先看结构，再逐个换成真组件。测试和 CI 里设了
+`RAG_FAKE_EMBED=1`，不触网不下模型，pytest 一秒内跑完。
 
-### 国内网络：下载 bge-m3 / bge-reranker
-代码已默认走镜像 `HF_ENDPOINT=https://hf-mirror.com`（见 [embedder.py](src/rag/embedder.py)）。
-首次用真实 embedding 前，建议先在**稳定网络**下预下载模型（~2.2GB，直连 huggingface.co 常失败）：
+### 模型下载（国内网络）
+
+代码默认走 `HF_ENDPOINT=https://hf-mirror.com` 镜像。直连不稳的话有两个备选：
+ModelScope 上有同款模型；仓库里的 `scripts/robust_download.py` 是给很差的网络准备的
+（分块下载 + 强制 206 校验 + SHA256 验收，进度不回退）。
 
 ```bash
-pip install -U "huggingface_hub[cli]"
 export HF_ENDPOINT=https://hf-mirror.com
 huggingface-cli download BAAI/bge-m3
-huggingface-cli download BAAI/bge-reranker-v2-m3   # 阶段 D 精排用
+huggingface-cli download BAAI/bge-reranker-v2-m3
 ```
 
-下载好后再跑 `python scripts/build_index.py 600519 000858`，`embedder.real` 会变 `True`，
-检索即为真实语义（伪向量模式下检索结果不可信，仅用于打通流程）。
-
-> 测试/CI 设 `RAG_FAKE_EMBED=1` 强制伪向量，全程不触网、不下载模型（`pytest` < 1s）。
+本地网速受限时可以先用 bge-small-zh-v1.5（约 100MB），`configs/settings.yaml` 里
+`embed_model` 改一下再重建索引即可，接口不变。伪向量模式下检索结果没有语义，
+只用来打通流程，不要拿去看效果。
 
 ### Docker
 
 ```bash
 docker build -t finance-report-agent .
-# 无 .env 也能跑（离线 stub）；带 key + 挂载索引则为真实生成
 docker run --rm --env-file .env \
   -v ./data:/app/data -v ./reports:/app/reports \
   finance-report-agent python main.py "贵州茅台 600519"
 ```
 
-> 镜像只含基础依赖（API 模式，~300MB）；RAG 重依赖（torch/bge）体积大，
-> 建议宿主机建好索引后挂载 `data/` 进容器。
+镜像只装了基础依赖（约 300MB），跑 API 模式够用；torch / bge 这些重依赖体积大，
+建议在宿主机建好索引后把 `data/` 挂进容器。不带 `.env` 直接 run 会走离线 stub，
+CI 里就是这么做冒烟测试的。
 
-## 开发路线（对应 `../Agent项目落地方案.md`）
-- [x] 脚手架 + Function Calling demo（阶段 A）
-- [x] RAG：真实 akshare 财务数据 + bge-m3 + FAISS（阶段 B）
-- [x] LangGraph 多智能体主系统 + 反思重检索 + 全局引用编号（阶段 D）
-- [x] 评估框架：LLM-as-Judge（faithfulness/context_precision/correctness）+ 对比 runner（阶段 F）
-- [x] 微调 bge-reranker（阶段 E-上：本地 M2/MPS 训练，`scripts/make_rerank_dataset.py` + `scripts/train_reranker.py`）
-- [x] LLaMA-Factory SFT 蒸馏 + OpenAI 兼容部署（阶段 E-下：RTX 4090，见 [sft/](sft/)）
-- [x] Docker + CI 收尾（阶段 G：多阶段构建 + .dockerignore；CI = lint + test + docker build 冒烟）
+## 进度
 
-## 蒸馏结果（阶段 E-下：7B 学生追平 671B 老师）
+- [x] 脚手架 + Function Calling demo
+- [x] RAG：akshare 真实财务数据 + FAISS + 重排
+- [x] LangGraph 多智能体 + 反思重检索 + 全局引用编号
+- [x] 评估框架：LLM-as-Judge 三指标 + 多配置对比 runner
+- [x] 微调 bge-reranker（本地 M2/MPS，`scripts/make_rerank_dataset.py` + `scripts/train_reranker.py`）
+- [x] SFT 蒸馏 Qwen2.5-7B + OpenAI 兼容部署（云端 4090，材料在 [sft/](sft/)）
+- [x] Docker + CI
 
-用 DeepSeek 当老师，蒸馏 201 条金融 RAG 问答数据，LoRA 微调 Qwen2.5-7B-Instruct
-（RTX 4090，3 epoch ≈ 4 分钟，train_loss 0.39 / eval_loss 0.29），
-LLaMA-Factory 起 OpenAI 兼容服务后与老师同题对比（评委统一 DeepSeek）：
+## 实验结果
 
-| 模型 | 参数量 | faithfulness | answer_correctness |
-|---|---|---|---|
-| 老师 DeepSeek | 671B | 0.733 | 0.793 |
-| **学生 Qwen2.5-7B-ft** | **7B** | **0.733** | **0.800** |
+### reranker：通用模型在垂直领域反而拖后腿
 
-> 学生模型以 ~1/96 的参数量在领域问答上追平（answer_correctness 微超）老师。
-> 师生在同 3 道题上一致失败——均为无公司名筛选题的**检索**未召回，非生成问题。
-> 主系统零改动切换：只改 `.env` 的 `LLM_BASE_URL/LLM_MODEL` 指向自托管服务。
-
-## 评估结果（LLM-as-Judge / DeepSeek，详见 [eval_results.md](eval_results.md)）
-
-17 家公司真实财务数据、15 题三梯度评测集（多公司单点 / 跨公司对比 / 无公司名筛选）：
+评测集是 17 家公司的真实财务数据、15 道题分三个梯度（多公司单点 / 跨公司对比 /
+无公司名筛选）。三组配置共用同一份索引和召回，只换重排器：
 
 | 配置 | faithfulness | context_precision | answer_correctness |
 |---|---|---|---|
 | baseline（不重排） | 0.800 | 0.333 | 0.793 |
 | rerank（通用 bge-reranker-base） | 0.644 | 0.280 | 0.767 |
-| **rerank_ft（域内微调后）** | **0.800** | **0.347** | **0.793** |
+| rerank_ft（域内微调后） | 0.800 | 0.347 | 0.793 |
 
-> **核心发现：通用重排器在垂直领域负迁移**（faithfulness -16pt），域内微调后收复并反超
-> （vs 通用重排 context_precision/faithfulness 均相对 **+24%**）。微调数据由 LLM 合成
-> query + FAISS 难负样本挖掘构造（201 train / 33 dev），训练层面 dev acc@1 0.879→1.0。
+通用 reranker 在这批"表格式中文财务文本"上是负收益（faithfulness 掉了 16 个点），
+它把对的段落排下去了。微调数据用 LLM 对每个 chunk 反向出题、FAISS 挖难负样本构造
+（201 train / 33 dev），微调后收复反超，相对通用重排 precision 和 faithfulness 各高
+约 24%；训练层面 dev acc@1 从 0.879 到 1.0。明细在 [eval_results.md](eval_results.md)。
 
-> 本地网速受限时 embedding 用 bge-small-zh-v1.5（~100MB）；好网络下改回
-> `configs/settings.yaml` 的 `embed_model: BAAI/bge-m3` 并重建索引即可。
+### SFT 蒸馏：用 7B 学生替换 671B 老师
+
+拿 DeepSeek 当老师蒸馏 201 条金融 RAG 问答，LoRA 微调 Qwen2.5-7B-Instruct
+（4090 上 3 epoch 约 4 分钟，train_loss 0.39 / eval_loss 0.29），起 OpenAI 兼容服务后
+和老师答同一批题，评委统一用 DeepSeek：
+
+| 模型 | 参数量 | faithfulness | answer_correctness |
+|---|---|---|---|
+| 老师 DeepSeek | 671B | 0.733 | 0.793 |
+| 学生 Qwen2.5-7B-ft | 7B | 0.733 | 0.800 |
+
+7B 在这个领域的问答质量追平了老师。师生在同 3 道题上一致答错，都是无公司名筛选题
+的检索没召回，不是生成的问题。切换到自托管模型时主系统零改动，只改 `.env` 里的
+`LLM_BASE_URL` 和 `LLM_MODEL` 两个字段。
 
 ## 实战笔记
 
-- [Stage E 踩坑记录](docs/踩坑记录-StageE.md)：本地微调全程 17 个真实问题的定位与修复
-  （环境冲突 / 弱网下载 / macOS 深度学习栈兼容性 / 数据质量 / 评测设计）。
+- [踩坑与设计记录](docs/踩坑与设计记录.md)：多智能体死循环的处理、各角色的取舍原因，
+  以及弱网下载 / macOS 深度学习栈 / 数据质量 / 评测设计上实际踩过的坑。
 
-> 数据仅用于个人学习 demo，不构成投资建议。
+数据仅用于个人学习 demo，不构成投资建议。
