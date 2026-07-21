@@ -39,7 +39,7 @@ cd /workspace   # RunPod 的持久盘挂载点
 git clone https://github.com/ziyang02/finance-report-agent.git
 cd finance-report-agent
 llamafactory-cli train sft/qwen2_5_7b_lora_sft.yaml
-# 4090 上约 10-20 分钟（数据 201 条、3 epoch）；loss 曲线在 saves/ 下
+# 实测 RTX 4090 约 4 分钟（数据 201 条、3 epoch）；loss 曲线在 saves/ 下
 ```
 
 ## 3. 合并 LoRA 并用 vLLM 起服务
@@ -74,7 +74,7 @@ LLM_MODEL=models/qwen2.5-7b-finance
 然后跑同一套评估，对比 DeepSeek vs 微调后 Qwen 的三项指标：
 
 ```bash
-python -m src.eval.run_eval
+python scripts/compare_sft.py
 ```
 
 | 对比项 | 说明 |

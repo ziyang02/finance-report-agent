@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 
 from src.config import settings
 
@@ -23,7 +24,14 @@ class Reranker:
             from FlagEmbedding import FlagReranker
 
             self._model = FlagReranker(self.model_name, use_fp16=True)
-        except Exception:
+        except Exception as exc:
+            message = (
+                f"无法加载 reranker 模型 {self.model_name!r}；将按召回分数保序，不执行真实重排。"
+                "评测或正式运行请安装模型，或设置 RAG_STRICT_MODE=1 直接失败。"
+            )
+            if os.getenv("RAG_STRICT_MODE") == "1":
+                raise RuntimeError(message) from exc
+            warnings.warn(message, RuntimeWarning, stacklevel=2)
             self._model = None
 
     @property

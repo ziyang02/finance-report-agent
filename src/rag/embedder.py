@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import warnings
 
 # 国内直连 huggingface.co 常常很慢/超时，默认走镜像（未手动设置时才生效）。
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
@@ -35,8 +36,15 @@ class Embedder:
                 from FlagEmbedding import FlagModel
 
                 self._model = FlagModel(self.model_name, use_fp16=True)
-        except Exception:
-            self._model = None  # 回退伪向量（模型未下载/网络不通时）
+        except Exception as exc:
+            message = (
+                f"无法加载 embedding 模型 {self.model_name!r}；将回退到不具备语义能力的伪向量。"
+                "评测或正式运行请安装模型，或设置 RAG_STRICT_MODE=1 直接失败。"
+            )
+            if os.getenv("RAG_STRICT_MODE") == "1":
+                raise RuntimeError(message) from exc
+            warnings.warn(message, RuntimeWarning, stacklevel=2)
+            self._model = None
 
     @property
     def real(self) -> bool:

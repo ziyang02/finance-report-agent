@@ -19,6 +19,12 @@ def test_dataset_has_ground_truth():
     assert all(item["question"] and item["ground_truth"] for item in EVAL_SET)
 
 
+def test_eval_dataset_has_15_unique_questions():
+    questions = [item["question"] for item in EVAL_SET]
+    assert len(questions) == 15
+    assert len(questions) == len(set(questions))
+
+
 def test_rag_qa_returns_contexts():
     qa = answer_question(EVAL_SET[0]["question"], _pipeline())
     assert "answer" in qa and isinstance(qa["contexts"], list)

@@ -18,4 +18,6 @@
 
 ## 解读
 - baseline vs rerank 的差值 = 引入重排的收益；rerank vs rerank_ft 的差值 = 领域微调的收益。
-- 评测集仅 8 问且同源语料较小，数字有波动，趋势比绝对值更有意义。
+- 评测集包含 17 家公司的 15 道题且规模较小，数字有波动，趋势比绝对值更有意义。
+- SFT 数据由 DeepSeek 蒸馏，当前评委也使用 DeepSeek，可能存在同源模型偏好；结果仅用于内部配置对比。
+- 机器可读汇总见 [`artifacts/eval_summary.json`](artifacts/eval_summary.json)。

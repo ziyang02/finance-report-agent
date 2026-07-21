@@ -1,0 +1,51 @@
+{
+  "evaluation": {
+    "companies": 17,
+    "questions": 15,
+    "judge": "DeepSeek",
+    "temperature": 0,
+    "limitations": [
+      "Small internal evaluation set",
+      "SFT teacher and current answer judge are both DeepSeek",
+      "Results are intended for controlled configuration comparison"
+    ]
+  },
+  "reranker": {
+    "baseline": {
+      "faithfulness": 0.8,
+      "context_precision": 0.333,
+      "answer_correctness": 0.793
+    },
+    "generic_reranker": {
+      "faithfulness": 0.644,
+      "context_precision": 0.28,
+      "answer_correctness": 0.767
+    },
+    "fine_tuned_reranker": {
+      "faithfulness": 0.8,
+      "context_precision": 0.347,
+      "answer_correctness": 0.793
+    },
+    "training_queries": 201,
+    "dev_queries": 33,
+    "dev_acc_at_1_before": 0.879,
+    "dev_acc_at_1_after": 1.0
+  },
+  "sft": {
+    "teacher": "DeepSeek",
+    "student": "Qwen2.5-7B-Instruct LoRA",
+    "training_examples": 201,
+    "epochs": 3,
+    "hardware": "RTX 4090",
+    "train_loss": 0.39,
+    "eval_loss": 0.29,
+    "teacher_metrics": {
+      "faithfulness": 0.733,
+      "answer_correctness": 0.793
+    },
+    "student_metrics": {
+      "faithfulness": 0.733,
+      "answer_correctness": 0.8
+    }
+  }
+}

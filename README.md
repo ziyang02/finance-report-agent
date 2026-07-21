@@ -108,7 +108,8 @@ baseline。详细结果见 [eval_results.md](eval_results.md)。
 
 使用 DeepSeek 生成 201 条金融 RAG 问答数据，再通过 LoRA 微调 Qwen2.5-7B-Instruct。
 在 RTX 4090 上训练 3 个 epoch 约需 4 分钟，train loss 为 0.39，eval loss 为 0.29。
-模型通过 OpenAI 兼容接口部署，并与 DeepSeek 回答同一批题；两组结果都由 DeepSeek 评估：
+模型通过 OpenAI 兼容接口部署，并与 DeepSeek 回答同一批 15 道题；两组结果都由
+DeepSeek 评估：
 
 | 模型 | 参数量 | faithfulness | answer_correctness |
 |---|---|---|---|
@@ -118,6 +119,17 @@ baseline。详细结果见 [eval_results.md](eval_results.md)。
 在这组评测中，7B 模型的两项分数与 DeepSeek 接近。两个模型答错的是相同的 3 道题，
 均属于“不指定公司名的筛选”，原因是检索阶段没有召回所需内容。切换到自托管模型时，
 只需修改 `.env` 中的 `LLM_BASE_URL` 和 `LLM_MODEL`。
+
+### 评测边界
+
+这些数字来自 17 家公司、15 道题的内部评测集，用于比较同一数据和检索配置下的相对变化，
+不代表通用金融问答能力。SFT 数据由 DeepSeek 蒸馏，当前答案评委也使用 DeepSeek，存在
+同源模型偏好；因此这里只报告内部对比，不把结果解释为学生模型在通用能力上超过教师。
+后续将加入独立 Judge、人工抽检和按公司隔离的测试集。
+
+机器可读的汇总结果见
+[`artifacts/eval_summary.json`](artifacts/eval_summary.json)，完整表格见
+[`eval_results.md`](eval_results.md)。
 
 ## 实战笔记
 
